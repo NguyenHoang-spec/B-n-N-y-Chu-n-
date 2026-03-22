@@ -324,7 +324,9 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   const [useProxy, setUseProxy] = useState(localStorage.getItem('td_use_proxy') === 'true');
   const [proxyUrl, setProxyUrl] = useState(localStorage.getItem('td_proxy_url') || '');
   const [proxyKey, setProxyKey] = useState(localStorage.getItem('td_proxy_key') || '');
-  const [proxyModel, setProxyModel] = useState(localStorage.getItem('td_proxy_model') || '');
+  const [proxyModelMain, setProxyModelMain] = useState(localStorage.getItem('td_proxy_model_main') || localStorage.getItem('td_proxy_model') || '');
+  const [proxyModelChronos, setProxyModelChronos] = useState(localStorage.getItem('td_proxy_model_chronos') || '');
+  const [proxyModelArchivist, setProxyModelArchivist] = useState(localStorage.getItem('td_proxy_model_archivist') || '');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -1016,7 +1018,9 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       localStorage.setItem('td_use_proxy', useProxy.toString());
       localStorage.setItem('td_proxy_url', proxyUrl);
       localStorage.setItem('td_proxy_key', proxyKey);
-      localStorage.setItem('td_proxy_model', proxyModel);
+      localStorage.setItem('td_proxy_model_main', proxyModelMain);
+      localStorage.setItem('td_proxy_model_chronos', proxyModelChronos);
+      localStorage.setItem('td_proxy_model_archivist', proxyModelArchivist);
       setShowProxySettingsModal(false);
       window.location.reload();
   };
@@ -1070,7 +1074,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
           // 3. Fallback to a simple generateContent test if models endpoint fails
           if (models.length === 0) {
-              const modelToTest = proxyModel || 'gemini-3.1-pro-preview';
+              const modelToTest = proxyModelMain || 'gemini-3.1-pro-preview';
               const testUrl = `${proxyBase}/v1beta/models/${modelToTest}:generateContent`;
               const response = await fetch(testUrl, {
                   method: 'POST',
@@ -1092,8 +1096,8 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
               setAvailableModels(models);
               setTestStatus('success');
               setTestMessage(`Kết nối thành công! Đã tải ${models.length} models.`);
-              if (!proxyModel) {
-                  setProxyModel(models[0]);
+              if (!proxyModelMain) {
+                  setProxyModelMain(models[0]);
               }
           }
       } catch (error: any) {
@@ -1573,13 +1577,37 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                                    />
                                </div>
                                <div className="space-y-1">
-                                   <label className="text-[10px] font-bold text-ink-500 uppercase">Model Chỉ Định (Tùy chọn)</label>
+                                   <label className="text-[10px] font-bold text-ink-500 uppercase">Model Chính (Cốt truyện)</label>
                                    <input 
                                        type="text"
                                        list="proxy-models"
-                                       value={proxyModel}
-                                       onChange={(e) => setProxyModel(e.target.value)}
-                                       placeholder="Vd: gemini-3.1-pro-preview (Hoặc chọn từ danh sách sau khi Test)"
+                                       value={proxyModelMain}
+                                       onChange={(e) => setProxyModelMain(e.target.value)}
+                                       placeholder="Vd: gemini-3.1-pro-preview"
+                                       className="w-full bg-ink-950 border border-ink-800 rounded-lg px-3 py-2 text-xs text-parchment-200 focus:border-emerald-500/50 outline-none"
+                                   />
+                               </div>
+
+                               <div className="space-y-1">
+                                   <label className="text-[10px] font-bold text-ink-500 uppercase">Model Thời Gian (Chronos)</label>
+                                   <input 
+                                       type="text"
+                                       list="proxy-models"
+                                       value={proxyModelChronos}
+                                       onChange={(e) => setProxyModelChronos(e.target.value)}
+                                       placeholder="Vd: gemini-3-flash-preview"
+                                       className="w-full bg-ink-950 border border-ink-800 rounded-lg px-3 py-2 text-xs text-parchment-200 focus:border-emerald-500/50 outline-none"
+                                   />
+                               </div>
+
+                               <div className="space-y-1">
+                                   <label className="text-[10px] font-bold text-ink-500 uppercase">Model Tóm Tắt (Archivist)</label>
+                                   <input 
+                                       type="text"
+                                       list="proxy-models"
+                                       value={proxyModelArchivist}
+                                       onChange={(e) => setProxyModelArchivist(e.target.value)}
+                                       placeholder="Vd: gemini-3-flash-preview"
                                        className="w-full bg-ink-950 border border-ink-800 rounded-lg px-3 py-2 text-xs text-parchment-200 focus:border-emerald-500/50 outline-none"
                                    />
                                    <datalist id="proxy-models">
