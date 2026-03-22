@@ -70,8 +70,8 @@ try {
 // -----------------------------------------------
 
 const DEFAULT_MODEL = 'gemini-3.1-pro-preview';
-const ARCHIVIST_MODEL = 'gemini-3-flash-preview';
-const CHRONOS_MODEL = 'gemini-3-flash-preview';
+const ARCHIVIST_MODEL = 'gemini-3.1-pro-preview';
+const CHRONOS_MODEL = 'gemini-3.1-pro-preview';
 
 const SAFETY_SETTINGS = [
   { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -125,13 +125,20 @@ class GeminiService {
     }
   }
 
-  private getModel(requestedModel?: string): string {
+  private getModel(taskType: 'main' | 'chronos' | 'archivist', defaultModel: string): string {
     const useProxy = localStorage.getItem('td_use_proxy') === 'true';
-    const proxyModel = localStorage.getItem('td_proxy_model');
-    if (useProxy && proxyModel) {
-      return proxyModel;
+    if (useProxy) {
+      if (taskType === 'main') {
+        return localStorage.getItem('td_proxy_model_main') || localStorage.getItem('td_proxy_model') || defaultModel;
+      }
+      if (taskType === 'chronos') {
+        return localStorage.getItem('td_proxy_model_chronos') || localStorage.getItem('td_proxy_model_main') || localStorage.getItem('td_proxy_model') || defaultModel;
+      }
+      if (taskType === 'archivist') {
+        return localStorage.getItem('td_proxy_model_archivist') || localStorage.getItem('td_proxy_model_main') || localStorage.getItem('td_proxy_model') || defaultModel;
+      }
     }
-    return requestedModel || DEFAULT_MODEL;
+    return defaultModel;
   }
 
   // --- AI 0: CHRONOS (TIMEKEEPER) ---
@@ -200,7 +207,7 @@ class GeminiService {
 
       try {
           const response = await this.ai.models.generateContent({
-              model: this.getModel(CHRONOS_MODEL),
+              model: this.getModel('chronos', CHRONOS_MODEL),
               contents: { role: 'user', parts: [{ text: "Calculate new time." }] },
               config: {
                   systemInstruction: systemPrompt,
@@ -253,7 +260,7 @@ class GeminiService {
 
       try {
           const response = await this.ai.models.generateContent({
-              model: this.getModel(CHRONOS_MODEL),
+              model: this.getModel('chronos', CHRONOS_MODEL),
               contents: { role: 'user', parts: [{ text: `Diễn biến gần đây: ${recentNarrative}\nHành động của người chơi: ${userPrompt}` }] },
               config: {
                   systemInstruction: systemPrompt,
@@ -531,7 +538,7 @@ class GeminiService {
 
       // Use the model selected by the user, or default to Pro
       const isFirstTurn = history.length === 0;
-      const selectedModel = this.getModel(modelName || DEFAULT_MODEL);
+      const selectedModel = this.getModel('main', modelName || DEFAULT_MODEL);
 
       let response;
       try {
@@ -764,7 +771,7 @@ class GeminiService {
 
     try {
         const response = await this.ai.models.generateContent({
-            model: this.getModel(ARCHIVIST_MODEL),
+            model: this.getModel('archivist', ARCHIVIST_MODEL),
             contents: [{ role: 'user', parts: [{ text: userMessage }] }],
             config: {
                 systemInstruction: systemPrompt,
@@ -802,7 +809,7 @@ class GeminiService {
     };
 
     const response = await this.ai.models.generateContent({
-        model: this.getModel(DEFAULT_MODEL),
+        model: this.getModel('main', DEFAULT_MODEL),
         contents: `Genre: ${genre}. Prompt: ${prompt}. Generate JSON settings.`,
         config: { 
             responseMimeType: 'application/json',
@@ -817,7 +824,7 @@ class GeminiService {
 
   async generateSingleWorldField(genre: GameGenre, label: string, context: string, heroInfo: any): Promise<string> {
     const response = await this.ai.models.generateContent({
-        model: this.getModel(DEFAULT_MODEL),
+        model: this.getModel('main', DEFAULT_MODEL),
         contents: `Genre: ${genre}. Field: ${label}. Context: ${context}. Short generation.`,
         config: {
             safetySettings: SAFETY_SETTINGS as any
@@ -833,7 +840,7 @@ class GeminiService {
           : `Hãy tóm tắt diễn biến sau một cách súc tích:\n${text}`;
           
       const response = await this.ai.models.generateContent({
-          model: this.getModel(ARCHIVIST_MODEL), // Use Lite for summary
+          model: this.getModel('archivist', ARCHIVIST_MODEL), // Use Lite for summary
           contents: prompt,
           config: {
               temperature: 0.4,
@@ -845,7 +852,7 @@ class GeminiService {
   
   async analyzeItem(itemName: string, context: string, genre: string): Promise<{description: string, type: string, rank: string, status?: string}> {
       const response = await this.ai.models.generateContent({
-          model: this.getModel(DEFAULT_MODEL),
+          model: this.getModel('main', DEFAULT_MODEL),
           contents: `Analyze: ${itemName}. JSON Output.`,
           config: { 
               responseMimeType: 'application/json',
@@ -870,7 +877,7 @@ class GeminiService {
       };
 
       const response = await this.ai.models.generateContent({
-          model: this.getModel(DEFAULT_MODEL),
+          model: this.getModel('main', DEFAULT_MODEL),
           contents: `Generate world from title: ${title}. JSON.`,
           config: { 
               responseMimeType: 'application/json',
@@ -906,7 +913,7 @@ class GeminiService {
 
     try {
       const response = await this.ai.models.generateContent({
-        model: this.getModel(CHRONOS_MODEL), // Dùng model nhanh cho việc này
+        model: this.getModel('chronos', CHRONOS_MODEL), // Dùng model nhanh cho việc này
         contents: { role: 'user', parts: [{ text: `Hãy viết mô tả chi tiết cho năng lực: ${name}` }] },
         config: {
           systemInstruction: systemPrompt,
@@ -957,7 +964,7 @@ class GeminiService {
 
       try {
           const response = await this.ai.models.generateContent({
-              model: this.getModel(DEFAULT_MODEL),
+              model: this.getModel('main', DEFAULT_MODEL),
               contents: prompt,
               config: {
                   responseMimeType: 'application/json',
