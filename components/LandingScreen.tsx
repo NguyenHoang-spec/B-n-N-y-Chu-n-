@@ -327,6 +327,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
   const [proxyModelMain, setProxyModelMain] = useState(localStorage.getItem('td_proxy_model_main') || localStorage.getItem('td_proxy_model') || '');
   const [proxyModelChronos, setProxyModelChronos] = useState(localStorage.getItem('td_proxy_model_chronos') || '');
   const [proxyModelArchivist, setProxyModelArchivist] = useState(localStorage.getItem('td_proxy_model_archivist') || '');
+  const [proxyModelImage, setProxyModelImage] = useState(localStorage.getItem('td_proxy_model_image') || '');
   const [testStatus, setTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [testMessage, setTestMessage] = useState('');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
@@ -1021,6 +1022,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       localStorage.setItem('td_proxy_model_main', proxyModelMain);
       localStorage.setItem('td_proxy_model_chronos', proxyModelChronos);
       localStorage.setItem('td_proxy_model_archivist', proxyModelArchivist);
+      localStorage.setItem('td_proxy_model_image', proxyModelImage);
       setShowProxySettingsModal(false);
       window.location.reload();
   };
@@ -1608,6 +1610,18 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
                                        value={proxyModelArchivist}
                                        onChange={(e) => setProxyModelArchivist(e.target.value)}
                                        placeholder="Vd: gemini-3-flash-preview"
+                                       className="w-full bg-ink-950 border border-ink-800 rounded-lg px-3 py-2 text-xs text-parchment-200 focus:border-emerald-500/50 outline-none"
+                                   />
+                               </div>
+
+                               <div className="space-y-1">
+                                   <label className="text-[10px] font-bold text-ink-500 uppercase">Model Tạo Ảnh (Image)</label>
+                                   <input 
+                                       type="text"
+                                       list="proxy-models"
+                                       value={proxyModelImage}
+                                       onChange={(e) => setProxyModelImage(e.target.value)}
+                                       placeholder="Vd: gemini-3.1-flash-image-preview"
                                        className="w-full bg-ink-950 border border-ink-800 rounded-lg px-3 py-2 text-xs text-parchment-200 focus:border-emerald-500/50 outline-none"
                                    />
                                    <datalist id="proxy-models">
