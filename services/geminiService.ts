@@ -23,9 +23,8 @@ try {
   Object.defineProperty(window, 'fetch', {
     configurable: true,
     enumerable: true,
-    get: () => async (...args: [RequestInfo | URL, RequestInit?]) => {
-      const [resource, config] = args;
-      const url = typeof resource === 'string' ? resource : resource instanceof URL ? resource.href : (resource as Request).url;
+    get: () => async (resource: RequestInfo | URL, config?: RequestInit) => {
+      const url = resource instanceof Request ? resource.url : resource.toString();
       
       const useProxy = localStorage.getItem('td_use_proxy') === 'true';
       const proxyUrl = localStorage.getItem('td_proxy_url');
@@ -41,9 +40,22 @@ try {
         
         const newUrl = `${cleanProxy}${originalUrlObj.pathname}${originalUrlObj.search}`;
         
-        const newConfig = { ...config };
-        if (newConfig.headers) {
-          const headers = new Headers(newConfig.headers);
+        if (resource instanceof Request) {
+          // Create a new Request object with the new URL but same properties
+          // This preserves method, body, headers, etc.
+          const newRequest = new Request(newUrl, resource);
+          
+          // Remove the dummy key headers that the SDK might add
+          newRequest.headers.delete("x-goog-api-key");
+          
+          if (proxyKey) {
+            newRequest.headers.set('Authorization', `Bearer ${proxyKey}`);
+          }
+          
+          return originalFetch(newRequest);
+        } else {
+          const newConfig = { ...config };
+          const headers = new Headers(newConfig.headers || {});
           
           // Remove the dummy key headers that the SDK might add
           headers.delete("x-goog-api-key");
@@ -52,16 +64,12 @@ try {
             headers.set('Authorization', `Bearer ${proxyKey}`);
           }
           newConfig.headers = headers;
-        } else if (proxyKey) {
-            newConfig.headers = new Headers({
-                'Authorization': `Bearer ${proxyKey}`
-            });
+          
+          return originalFetch(newUrl, newConfig);
         }
-        
-        return originalFetch(newUrl, newConfig);
       }
 
-      return originalFetch(url, config);
+      return originalFetch(resource, config);
     }
   });
 } catch (e) {
@@ -125,7 +133,7 @@ class GeminiService {
     }
   }
 
-  private getModel(taskType: 'main' | 'chronos' | 'archivist', defaultModel: string): string {
+  private getModel(taskType: 'main' | 'chronos' | 'archivist' | 'image', defaultModel: string): string {
     const useProxy = localStorage.getItem('td_use_proxy') === 'true';
     if (useProxy) {
       if (taskType === 'main') {
@@ -136,6 +144,9 @@ class GeminiService {
       }
       if (taskType === 'archivist') {
         return localStorage.getItem('td_proxy_model_archivist') || localStorage.getItem('td_proxy_model_main') || localStorage.getItem('td_proxy_model') || defaultModel;
+      }
+      if (taskType === 'image') {
+        return localStorage.getItem('td_proxy_model_image') || defaultModel;
       }
     }
     return defaultModel;
@@ -164,6 +175,7 @@ class GeminiService {
       STORYTELLER'S THOUGHT PROCESS: "${thoughtProcess}"
       RECENT NARRATIVE: "${recentNarrative}"
       LOGIC RULES:
+      LOGIC RULES:
        1. **TIME PROGRESSION (FORWARD ONLY)**: Time MUST ONLY increase. Never revert to a past time. Next Time = Current Time + Action Duration.
        2. **NARRATIVE TIME EXTRACTION (ABSOLUTE HIGHEST PRIORITY)**:
          - You MUST read the STORYTELLER'S THOUGHT PROCESS and the RECENT NARRATIVE first. They are the ultimate source of truth.
@@ -185,7 +197,8 @@ class GeminiService {
            Example: "Chủ Nhật - 15/08/1024/14:23 - Buổi chiều/Mùa thu"
        6. **INITIALIZATION**: If starting a new game (Current Time is empty or initializing), generate a logical starting time based on the World Context. Avoid generic dates like 01/01/1000.
        7. **SILENT EXECUTION**: Time calculation must remain strictly in the background.
-       8. **"CRITICAL RULE FOR TIME: Never explicitly state the exact time or use clock formats (e.g., avoid writing 'It is currently 13:05' or 'At 2:00 PM'). Instead, seamlessly weave the time of day into the narrative through environmental storytelling. Show the passage of time by describing the position of the sun, the quality of light, the length of shadows, the weather, or the ambient atmosphere."
+       8. **"CRITICAL RULE FOR TIME: Never explicitly state the exact time or use clock formats (e.g., avoid writing 'It is currently 13:05' or 'At 2:00 PM'). Instead, seamlessly weave the time of day into the narrative through environmental storytelling. Show the passage of time by describing the position of the sun, the quality of light, the length of shadows, the weather, or the ambient atmosphere.
+       9. **NO CLOCK PHRASES**: STRICTLY PROHIBITED from using phrases like "Đồng hồ chỉ...", "Bây giờ là...", "Lúc này là...", or writing out time in words like "mười giờ ba mươi phút". If you must imply time, use natural descriptions like "Mặt trời đã lên đến đỉnh đầu", "Bóng tối bắt đầu bao trùm", "Tiếng gà gáy báo hiệu bình minh"."
       
       INPUT ACTION: "${userAction}"
       
@@ -242,7 +255,7 @@ class GeminiService {
       3. Nếu KHÔNG CÓ giao dịch: Giữ nguyên SỐ TIỀN HIỆN TẠI.
       4. KHÔNG BAO GIỜ tự bịa ra giao dịch nếu không được nhắc đến.
       5. Giữ nguyên đơn vị tiền tệ (ví dụ: Vàng, Bạc, Đồng, VND, USD...).
-      6. Nếu SỐ TIỀN HIỆN TẠI là "0" hoặc trống ở LƯỢT ĐẦU TIÊN, hãy tự tạo một số tiền khởi điểm hợp lý dựa trên bối cảnh (ví dụ: "100 Đồng", "50 Vàng").
+      6. Nếu SỐ TIỀN HIỆN TẠI là "0" hoặc trống ở LƯỢT ĐẦU TIÊN, hãy tự tạo một số tiền khởi điểm hợp lý dựa trên bối cảnh (ví dụ: "100 Đồng", "50 Vàng").Đồng tiền phải phù hợp với bối cảnh thế giới(Nhật Bản - Yên ).
       
       TRẢ VỀ KẾT QUẢ DƯỚI DẠNG JSON:
       {
@@ -326,7 +339,11 @@ class GeminiService {
 
       ⚠️ TRẠNG THÁI 2: EXTREME EROTICA (CHỈ KHI CÓ CẢNH NÓNG-MIÊU TẢ CỰC CHI TIẾT)
       - **KÍCH HOẠT KHI**: Người chơi ra lệnh rõ ràng (ví dụ: "làm tình", "sờ", "hôn sâu", "cởi đồ", "chịch") hoặc tình huống cốt truyện dẫn đến sex một cách logic và tự nhiên.
-      - **MỨC ĐỘ MIÊU TẢ: "SIÊU THỰC & GIẢI PHẪU HỌC" (ANATOMICAL REALISM)**:
+      - **PHONG CÁCH: SIÊU THỰC & ĐỜI THỰC (PHOTOREALISTIC & CINEMATIC REALISM - TUÂN THỦ TUYỆT ĐỐI)**:
+         + **CẤM TUYỆT ĐỐI PHONG CÁCH HENTAI/ANIME**: Không miêu tả nhân vật với các đặc điểm phi thực tế của anime (mắt to quá khổ, eo nhỏ bất thường, ngực to quá mức chịu đựng của cột sống, da trắng bệch như nhựa, biểu cảm ahegao trợn mắt, tim trong mắt).
+         + **MIÊU TẢ ĐỜI THỰC**: Tập trung vào vẻ đẹp của con người thật. Miêu tả kết cấu da (lỗ chân lông, sự mịn màng, những vết tàn nhang nhỏ, nốt ruồi duyên, sự ửng hồng tự nhiên của mạch máu dưới da). Cơ thể phải có trọng lượng và sự mềm mại của da thịt, không phải sự cứng nhắc của búp bê.
+         + **BIỂU CẢM TỰ NHIÊN**: Biểu cảm khuôn mặt phải chân thực: sự say đắm, ánh mắt mơ màng, đôi môi hé mở vì hơi thở dốc, sự ngượng ngùng hay khao khát mãnh liệt nhưng vẫn giữ được nét người thật. 
+      - **MỨC ĐỘ MIÊU TẢ: "GIẢI PHẪU HỌC CHI TIẾT" (ANATOMICAL PRECISION)**:
          + **ZOOM CẬN CẢNH**: Miêu tả chi tiết từng bộ phận sinh dục: Môi lớn, môi bé, hột le (âm vật), cửa mình, nếp gấp tử cung, đầu khấc, bao quy đầu, từng sợi lông mu (rậm rạp/tỉa tót), lỗ nhị...
          + **GIÁC QUAN**: Độ ướt át của dâm thủy, độ nóng của thịt, tiếng lép nhép khi va chạm, mùi hương đặc trưng, sự co thắt của cơ vòng.
          + **Miêu tả cực chi tiết cảnh chịch.
@@ -347,14 +364,15 @@ class GeminiService {
       - Tuyệt đối KHÔNG biến nhân vật thành những cỗ máy tình dục vô tri chỉ biết rên rỉ "sướng quá", "nữa đi".
       - Lời thoại khi làm tình PHẢI phản ánh đúng địa vị, tính cách và thái độ của họ với người chơi.
       1. **LỜI THOẠI (DIALOGUE) & ÂM THANH**:
-         - **CẤM**: Biến tất cả nhân vật thành "búp bê tình dục" chỉ biết hét "sướng quá", "đụ em đi", "bắn vào trong". Đây là văn mẫu rẻ tiền.
+         - **CẤM**: Biến tất cả nhân vật thành "búp bê tình dục" chỉ biết hét "sướng quá", "đụ em đi", "bắn vào trong". Đây là văn mẫu rẻ tiền.Không rên liên tục kể cả nứng lồn cũng chỉ rên nhẹ ,thở dốc.
          - **YÊU CẦU**: Nhân vật phải nói chuyện đúng với văn phong thường ngày. Tuyệt đối KHÔNG ép nhân vật thanh cao, kiêu ngạo dùng từ thô tục trong lời thoại của họ.
          - **Âm thanh thực tế**: Ngoài đời người ta thường thở dốc, gọi tên nhau, rên rỉ nhỏ, rên khẽ, kìm nén trong cổ họng hoặc cắn môi. Lời thoại lúc này thường đứt quãng, vô nghĩa, hoặc chỉ là những tiếng thở hắt ra (ví dụ: "Ưm...", "A...", gọi tên đối tác). TUYỆT ĐỐI KHÔNG gào thét hay rên rỉ ầm ĩ một cách giả tạo. Nhân vật VẪN GIỮ ĐƯỢC KIỂM SOÁT, không bao giờ mất kiểm soát hoàn toàn hay phát điên vì tình dục.
          - 🚫 **[BANNED HENTAI DIALOGUE - LỆNH CẤM TUYỆT ĐỐI]**: HỆ THỐNG SẼ ĐÁNH GIÁ LÀ LỖI NGHIÊM TRỌNG NẾU NHÂN VẬT NÓI NHỮNG CÂU SAU: "Sâu quá", "Rách mất", "Hỏng mất", "Chạm tới tử cung rồi", "Đụng tới tử cung", "Đầy quá", "Bụng nóng quá", "Tràn ra mất", "Kẹp chặt", "Đâm nát l đi", "Đâm nát em đi", "Đâm mạnh thế", "Chết mất". TUYỆT ĐỐI KHÔNG dùng những câu thoại dâm đãng cường điệu, phi thực tế.
          - **Giải phẫu học**: Phụ nữ KHÔNG có dây thần kinh để cảm nhận "tinh dịch nóng trong bụng" hay "chạm tử cung". Hãy miêu tả cảm giác va chạm vật lý, sự chật chội, hoặc sự mệt mỏi, KHÔNG miêu tả cảm giác hư cấu bên trong nội tạng.
 
-      2. **SINH LÝ HỌC THỰC TẾ (REALISTIC PHYSIOLOGY - NO HENTAI LOGIC)**:
+      2. **SINH LÝ HỌC THỰC TẾ (REALISTIC PHYSIOLOGY - NO HENTAI LOGIC - TUÂN THỦ TUYỆT ĐỐI)**:
          - Cơ thể phản ứng theo đúng chuẩn ngoài đời thực, KHÔNG dùng logic Hentai.
+         - Khi địt ,chỉ rên nhẹ ,kẽ cả có nứng lồn. Không cầu xim.
          - **CƠ CHẾ HAM MUỐN (REALISTIC LIBIDO)**: TUYỆT ĐỐI KHÔNG CÓ CHUYỆN nhân vật nữ vừa gặp người yêu đã "nứng", "chảy nước" hay "đòi làm tình" ngay lập tức. Phụ nữ ngoài đời có cuộc sống bình thường, biết mệt mỏi, có những lúc chỉ muốn ôm ngủ, trò chuyện, đi chơi. Ham muốn tình dục cần có bối cảnh phù hợp (không gian riêng tư, lãng mạn), tâm trạng thoải mái và sự kích thích dần dần. KHÔNG được chủ động đòi "địt" hoặc thể hiện sự nứng sảng nếu chưa có màn dạo đầu đủ lâu hoặc bối cảnh không hợp lý. ĐẶC BIỆT: Vài cái chạm nhẹ, ôm ấp, hay nụ hôn bình thường KHÔNG THỂ làm nhân vật động tình hay nứng ngay lập tức. Phải có sự khơi gợi, vuốt ve liên tục ở các vùng nhạy cảm trong thời gian dài mới bắt đầu có phản ứng sinh lý. TUYỆT ĐỐI CẤM NPC (dù là người yêu/vợ) tự động "vồ lấy", "đè người chơi ra" hay chủ động gạ gẫm quan hệ một cách vồ vập, thiếu tự nhiên. Mọi thứ phải bắt đầu từ sự lãng mạn, chậm rãi.
          - **Dạo đầu (Foreplay) & Dịch tiết (Fluids)**: KHÔNG CÓ CHUYỆN mới chạm nhẹ, hôn hay sờ ngực mà "nước chảy lênh láng", "bắn thành tia" hay "chảy ầm ầm như suối". Lượng dịch tiết sinh lý ngoài đời chỉ đủ để bôi trơn, hơi ẩm ướt, dính dính chứ KHÔNG chảy tràn trề ướt đẫm cả đùi hay ga giường một cách phi lý. Quá trình kích thích phải diễn ra từ từ, cần thời gian để cơ thể nóng lên. Phản ứng đau đớn, bỡ ngỡ, rát ở lần đầu hoặc khi chưa đủ bôi trơn phải được miêu tả chân thực.
          - **Khi giao hợp (Intercourse)**: Phải miêu tả sự chân thực của thể lực và vật lý. Con người biết mệt mỏi, đổ mồ hôi, thở dốc, hụt hơi. Không có chuyện nhấp liên tục với tốc độ máy khâu mà không biết mệt.
@@ -524,7 +542,7 @@ class GeminiService {
     };
 
     try {
-      const recentHistory = history.slice(-20);
+      const recentHistory = history.slice(-500);
 
       const contents = recentHistory.map(t => ({
         role: t.role,
@@ -976,6 +994,46 @@ class GeminiService {
           return JSON.parse(response.text || "{}");
       } catch (e) {
           return { description: "Lỗi tạo thông tin." };
+      }
+  }
+
+  async generateImage(prompt: string, nsfwIntensity?: string): Promise<string | null> {
+      try {
+          let finalPrompt = prompt;
+          if (nsfwIntensity === 'extreme') {
+              finalPrompt += " (NSFW, extremely detailed, uncensored, highly graphic)";
+          } else if (nsfwIntensity === 'soft') {
+              finalPrompt += " (Sensual, artistic, soft NSFW, suggestive)";
+          }
+
+          const modelToUse = this.getModel('image', 'gemini-3.1-flash-image-preview');
+
+          const response = await this.ai.models.generateContent({
+              model: modelToUse,
+              contents: {
+                  parts: [
+                      {
+                          text: finalPrompt,
+                      },
+                  ],
+              },
+              config: {
+                  // imageConfig: { aspectRatio: "1:1" } // Optional
+              }
+          });
+
+          const parts = response.candidates?.[0]?.content?.parts || [];
+          for (const part of parts) {
+              if (part.inlineData) {
+                  const base64EncodeString: string = part.inlineData.data;
+                  const mimeType = part.inlineData.mimeType || 'image/png';
+                  return `data:${mimeType};base64,${base64EncodeString}`;
+              }
+          }
+          return null;
+      } catch (e) {
+          console.error("Image Generation Error:", e);
+          return null;
       }
   }
 }
