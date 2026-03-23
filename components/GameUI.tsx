@@ -419,6 +419,7 @@ export const GameUI: React.FC<GameUIProps> = ({
   const [newWikiType, setNewWikiType] = useState<'NPC' | 'LOCATION' | 'ITEM' | 'FACTION' | 'SKILL'>('NPC');
   const [newWikiDesc, setNewWikiDesc] = useState('');
   const [isGeneratingWiki, setIsGeneratingWiki] = useState(false); // NEW: Auto-fill state
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false); // NEW: Image generation state
 
   // GALLERY STATES
   const [appearanceTab, setAppearanceTab] = useState<'SETTINGS' | 'GALLERY'>('SETTINGS');
@@ -794,6 +795,52 @@ export const GameUI: React.FC<GameUIProps> = ({
           alert("Lỗi khi tự động điền.");
       } finally {
           setIsGeneratingWiki(false);
+      }
+  };
+
+  // NEW: Image Generation Handler
+  const handleGenerateImage = async () => {
+      let prompt = inputRef.current?.value.trim();
+      if (!prompt) {
+          const lastTurn = turns[turns.length - 1];
+          if (lastTurn) {
+              prompt = `Generate an image based on this scene: ${lastTurn.narrative.substring(0, 500)}`;
+          } else {
+              alert("Vui lòng nhập mô tả ảnh hoặc chơi tiếp để tạo ảnh từ cốt truyện.");
+              return;
+          }
+      }
+
+      setIsGeneratingImage(true);
+      try {
+          const imageUrl = await geminiService.generateImage(prompt, session.nsfwIntensity);
+          
+          if (imageUrl) {
+              const newImage: GalleryImage = {
+                  url: imageUrl,
+                  type: 'image',
+                  addedAt: Date.now(),
+                  tags: ['AI Generated']
+              };
+              const id = await db.imageGallery.add(newImage);
+              const updated = await db.imageGallery.orderBy('addedAt').reverse().toArray();
+              setGalleryImages(updated);
+              
+              // Optionally show the image or set as background
+              setTempBgUrl(imageUrl);
+              setTempBgType('image');
+              setShowAppearance(true);
+              setAppearanceTab('GALLERY');
+              
+              if (inputRef.current) inputRef.current.value = '';
+          } else {
+              alert("Không thể tạo ảnh. Vui lòng kiểm tra lại Proxy hoặc Model.");
+          }
+      } catch (error) {
+          console.error(error);
+          alert("Lỗi khi tạo ảnh.");
+      } finally {
+          setIsGeneratingImage(false);
       }
   };
 
@@ -1960,6 +2007,15 @@ export const GameUI: React.FC<GameUIProps> = ({
                     />
                 </div>
                 
+                <button 
+                    onClick={handleGenerateImage} 
+                    disabled={isGeneratingImage || loading} 
+                    className={`w-12 rounded-xl flex items-center justify-center text-lg shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 border bg-ink-800 border-ink-600 text-ink-300 hover:text-white hover:border-emerald-500`} 
+                    title="Tạo Ảnh từ cốt truyện hoặc nội dung nhập"
+                >
+                    <i className={`fas ${isGeneratingImage ? 'fa-spinner fa-spin' : 'fa-image'}`}></i>
+                </button>
+
                 <button onClick={() => { if(inputRef.current) { handleInputSubmit(inputRef.current.value); inputRef.current.value = ''; } }} disabled={loading} className={`w-16 rounded-xl flex items-center justify-center text-xl shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 disabled:opacity-50 border ${inputMode === 'system' ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white border-purple-400/50 hover:shadow-[0_0_15px_rgba(147,51,234,0.4)]' : 'bg-gradient-to-br from-gold-500 to-amber-600 text-white border-gold-400/50 hover:shadow-[0_0_15px_rgba(234,179,8,0.4)]'}`}>
                     <i className={`fas ${loading ? 'fa-spinner fa-spin' : 'fa-bolt'}`}></i>
                 </button>
